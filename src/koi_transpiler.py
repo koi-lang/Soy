@@ -18,6 +18,9 @@ class KoiTranspiler(KoiListener):
         self.file.write(" ".join(self.current_line))
         self.current_line = []
 
+    def enterBlock(self, ctx:KoiParser.BlockContext):
+        self.current_line.append("{")
+
     def enterFunction_block(self, ctx:KoiParser.Function_blockContext):
         self.current_line.append(ctx.returnType.getText())
         self.current_line.append(ctx.name().getText())
@@ -25,13 +28,11 @@ class KoiTranspiler(KoiListener):
     def exitFunction_block(self, ctx:KoiParser.Function_blockContext):
         self.current_line.append("}")
 
-    def enterParameter(self, ctx:KoiParser.ParameterContext):
+    def enterParameter_set(self, ctx:KoiParser.Parameter_setContext):
         self.current_line.append("(")
 
-    def exitParameter(self, ctx:KoiParser.ParameterContext):
+    def exitParameter_set(self, ctx:KoiParser.Parameter_setContext):
         self.current_line.append(")")
-
-        self.current_line.append("{")
 
     def enterName(self, ctx:KoiParser.NameContext):
         self.current_name = ctx.getText()
@@ -42,13 +43,11 @@ class KoiTranspiler(KoiListener):
                 self.current_line.append("char*")
 
             else:
-                self.current_line.append(ctx.getText())
+                self.current_line.append(ctx.getText().split("[]")[0])
 
         if type(ctx.parentCtx) is KoiParser.ParameterContext:
-            self.current_line.append(self.current_name + "[]" if "[]" in ctx.getText() else "")
+            self.current_line.append(self.current_name + ("[]" if "[]" in ctx.getText() else ""))
             self.current_name = ""
-
-            self.current_line.append(",")
 
     def enterReturn_stmt(self, ctx:KoiParser.Return_stmtContext):
         self.current_line.append("return")
@@ -58,7 +57,7 @@ class KoiTranspiler(KoiListener):
     def enterFunction_call(self, ctx:KoiParser.Function_callContext):
         # TODO: Write the console library and add imports
         if ctx.funcName.getText() == "println":
-            self.current_line.append("print")
+            self.current_line.append("printf")
 
         else:
             self.current_line.append(ctx.funcName.getText())
@@ -68,7 +67,9 @@ class KoiTranspiler(KoiListener):
         # TODO: Resolve the order of parameters
         for v in ctx.paramValues:
             self.current_line.append(v.getText())
-            self.current_line.append(",")
+
+            if ctx.paramValues.index(v) < len(ctx.paramValues) - 1 and len(ctx.paramValues) > 0:
+                self.current_line.append(",")
 
         self.current_line.append(")")
         self.current_line.append(";")
