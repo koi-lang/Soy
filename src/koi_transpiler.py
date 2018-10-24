@@ -47,6 +47,16 @@ class KoiTranspiler(KoiListener):
 
         if type(ctx.parentCtx) is KoiParser.ParameterContext:
             self.current_line.append(self.current_name + ("[]" if "[]" in ctx.getText() else ""))
+
+            params = []
+
+            for i in ctx.parentCtx.parentCtx.parameter():
+                params.append(i.name().getText())
+
+            if len(params) > 0:
+                if params.index(self.current_name) < len(params) - 1:
+                    self.current_line.append(",")
+
             self.current_name = ""
 
     def enterReturn_stmt(self, ctx:KoiParser.Return_stmtContext):
@@ -68,8 +78,9 @@ class KoiTranspiler(KoiListener):
         for v in ctx.paramValues:
             self.current_line.append(v.getText())
 
-            if ctx.paramValues.index(v) < len(ctx.paramValues) - 1 and len(ctx.paramValues) > 0:
-                self.current_line.append(",")
+            if len(ctx.paramValues) > 0:
+                if ctx.paramValues.index(v) < len(ctx.paramValues) - 1:
+                    self.current_line.append(",")
 
         self.current_line.append(")")
         self.current_line.append(";")
