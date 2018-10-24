@@ -45,29 +45,26 @@ class KoiTranspiler(KoiListener):
     def enterParameter_set(self, ctx:KoiParser.Parameter_setContext):
         self.current_line.append("(")
 
+        params = []
+
+        for i in ctx.parameter():
+            params.append(i.name().getText())
+
+        for p in ctx.parameter():
+            self.current_line.append(koi_to_c(p.type_().getText()))
+            self.current_line.append(p.name().getText())
+
+            if "[]" in p.type_().getText():
+                self.current_line.append("[]")
+
+            if params.index(p.name().getText()) < len(params) - 1:
+                self.current_line.append(",")
+
     def exitParameter_set(self, ctx:KoiParser.Parameter_setContext):
         self.current_line.append(")")
 
     def enterName(self, ctx:KoiParser.NameContext):
         self.current_name = ctx.getText()
-
-    def enterType_(self, ctx:KoiParser.Type_Context):
-        if type(ctx.parentCtx) is not KoiParser.Type_Context and type(ctx.parentCtx) is not KoiParser.Function_blockContext and type(ctx.parentCtx) is not KoiParser.For_blockContext:
-            self.current_line.append(koi_to_c(ctx.getText()))
-
-        if type(ctx.parentCtx) is KoiParser.ParameterContext:
-            self.current_line.append(self.current_name + ("[]" if "[]" in ctx.getText() else ""))
-
-            params = []
-
-            for i in ctx.parentCtx.parentCtx.parameter():
-                params.append(i.name().getText())
-
-            if len(params) > 0:
-                if params.index(self.current_name) < len(params) - 1:
-                    self.current_line.append(",")
-
-            self.current_name = ""
 
     def enterReturn_stmt(self, ctx:KoiParser.Return_stmtContext):
         self.current_line.append("return")
@@ -103,6 +100,7 @@ class KoiTranspiler(KoiListener):
             self.current_line.append(";")
 
     def enterFor_block(self, ctx:KoiParser.For_blockContext):
+        # FIXME: Fix in-line lists
         self.current_name = ctx.name()[0].getText()
         self.current_line.append("int")
         self.current_line.append(self.loop_name)
@@ -126,20 +124,45 @@ class KoiTranspiler(KoiListener):
         self.current_line.append("(")
 
         if ctx.with_length() is None:
-            self.current_line.append(ctx.name()[1].getText())
+            size = ctx.name()[1].getText()
 
         else:
-            self.current_line.append(ctx.with_length().getText())
+            size = ctx.with_length().getText()
+        self.current_line.append(size)
 
         self.secondary_name = ctx.name()[0].getText()
 
         self.current_line.append(")")
 
-        self.current_line.append("-")
-        self.current_line.append("1")
+        self.current_line.append("/")
+
+        self.current_line.append("sizeof")
+        self.current_line.append("*")
+        self.current_line.append("(")
+        self.current_line.append(size)
+        self.current_line.append(")")
 
         self.current_line.append(";")
         self.current_line.append(self.loop_name)
         self.current_line.append("++")
         self.current_line.append(")")
 
+    def enterLocal_asstmt(self, ctx:KoiParser.Local_asstmtContext):
+        self.current_line.append(koi_to_c(ctx.type_().getText()))
+        self.current_line.append(ctx.name().getText())
+
+        if "[]" in ctx.type_().getText():
+            self.current_line.append("[]")
+
+        self.current_line.append("=")
+
+        if ctx.true_value().getText().startswith("["):
+            self.current_line.append("{")
+            self.current_line.append(ctx.true_value().getText()[1:-1])
+            self.current_line.append("}")
+
+        else:
+            self.current_line.append(ctx.true_value().getText())
+
+    def exitLocal_asstmt(self, ctx:KoiParser.Local_asstmtContext):
+        self.current_line.append(";")
