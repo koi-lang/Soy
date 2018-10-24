@@ -13,6 +13,9 @@ class KoiTranspiler(KoiListener):
 
         self.current_line = ["#include <stdio.h>\n"]
         self.current_name = ""
+        self.secondary_name = ""
+
+        self.loop_name = "index"
 
     def exitLine(self, ctx:KoiParser.LineContext):
         self.file.write(" ".join(self.current_line))
@@ -21,12 +24,21 @@ class KoiTranspiler(KoiListener):
     def enterBlock(self, ctx:KoiParser.BlockContext):
         self.current_line.append("{")
 
+        if type(ctx.parentCtx) is KoiParser.For_blockContext:
+            self.current_line.append(self.secondary_name)
+            self.current_line.append("=")
+            self.current_line.append(self.current_name)
+            self.current_line.append("[")
+            self.current_line.append(self.loop_name)
+            self.current_line.append("]")
+            self.current_line.append(";")
+
+    def exitBlock(self, ctx:KoiParser.BlockContext):
+        self.current_line.append("}")
+
     def enterFunction_block(self, ctx:KoiParser.Function_blockContext):
         self.current_line.append(ctx.returnType.getText())
         self.current_line.append(ctx.name().getText())
-
-    def exitFunction_block(self, ctx:KoiParser.Function_blockContext):
-        self.current_line.append("}")
 
     def enterParameter_set(self, ctx:KoiParser.Parameter_setContext):
         self.current_line.append("(")
@@ -66,7 +78,7 @@ class KoiTranspiler(KoiListener):
 
     def enterFunction_call(self, ctx:KoiParser.Function_callContext):
         # TODO: Write the console library and add imports
-        if ctx.funcName.getText() == "println":
+        if ctx.funcName.getText() in ["print", "println"]:
             self.current_line.append("printf")
 
         else:
@@ -84,4 +96,49 @@ class KoiTranspiler(KoiListener):
 
         self.current_line.append(")")
         self.current_line.append(";")
+
+        if ctx.funcName.getText() == "println":
+            self.current_line.append("printf")
+            self.current_line.append("(")
+            self.current_line.append("\"\\n\"")
+            self.current_line.append(")")
+            self.current_line.append(";")
+
+    def enterFor_block(self, ctx:KoiParser.For_blockContext):
+        self.current_name = ctx.name()[0].getText()
+        self.current_line.append("int")
+        self.current_line.append(self.loop_name)
+        self.current_line.append(";")
+
+        # FIXME: Use the array's type instead
+        self.current_line.append("char*")
+        self.current_line.append(self.current_name)
+        self.current_line.append(";")
+
+        self.current_line.append("for")
+        self.current_line.append("(")
+        self.current_line.append(self.loop_name)
+        self.current_line.append("=")
+        self.current_line.append("0")
+
+        self.current_line.append(";")
+
+        self.current_line.append(self.loop_name)
+        self.current_line.append("<")
+        self.current_line.append("sizeof")
+        self.current_line.append("(")
+
+        if ctx.with_length() is None:
+            self.current_line.append(ctx.name()[1].getText())
+
+        else:
+            self.current_line.append(ctx.with_length().getText())
+
+        self.secondary_name = ctx.name()[0].getText()
+
+        self.current_line.append(")")
+        self.current_line.append(";")
+        self.current_line.append(self.loop_name)
+        self.current_line.append("++")
+        self.current_line.append(")")
 
