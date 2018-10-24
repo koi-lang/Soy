@@ -3,6 +3,8 @@ import pathlib
 from .gen.KoiParser import KoiParser
 from .gen.KoiListener import KoiListener
 
+from .types import *
+
 
 class KoiTranspiler(KoiListener):
     def __init__(self):
@@ -50,12 +52,8 @@ class KoiTranspiler(KoiListener):
         self.current_name = ctx.getText()
 
     def enterType_(self, ctx:KoiParser.Type_Context):
-        if type(ctx.parentCtx) is not KoiParser.Type_Context and type(ctx.parentCtx) is not KoiParser.Function_blockContext:
-            if ctx.getText().startswith("str"):
-                self.current_line.append("char*")
-
-            else:
-                self.current_line.append(ctx.getText().split("[]")[0])
+        if type(ctx.parentCtx) is not KoiParser.Type_Context and type(ctx.parentCtx) is not KoiParser.Function_blockContext and type(ctx.parentCtx) is not KoiParser.For_blockContext:
+            self.current_line.append(koi_to_c(ctx.getText()))
 
         if type(ctx.parentCtx) is KoiParser.ParameterContext:
             self.current_line.append(self.current_name + ("[]" if "[]" in ctx.getText() else ""))
@@ -110,8 +108,7 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(self.loop_name)
         self.current_line.append(";")
 
-        # FIXME: Use the array's type instead
-        self.current_line.append("char*")
+        self.current_line.append(koi_to_c(ctx.type_().getText()))
         self.current_line.append(self.current_name)
         self.current_line.append(";")
 
@@ -137,6 +134,10 @@ class KoiTranspiler(KoiListener):
         self.secondary_name = ctx.name()[0].getText()
 
         self.current_line.append(")")
+
+        self.current_line.append("-")
+        self.current_line.append("1")
+
         self.current_line.append(";")
         self.current_line.append(self.loop_name)
         self.current_line.append("++")
