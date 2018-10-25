@@ -1,4 +1,5 @@
 import pathlib
+import os
 
 from .gen.KoiParser import KoiParser
 from .gen.KoiListener import KoiListener
@@ -12,6 +13,10 @@ class KoiTranspiler(KoiListener):
         # TODO: Change to use the Koi file name
         # TODO: Create an associating header
         self.file = open("out/main.c", "w")
+
+        # Enviroment variables
+        # SOY_HOME = A folder named "Soy". This is used to house the Soy install.
+        # SOY_LIB = A folder in SOY_HOME, called "lib". This is used to house the core and standard libraries for Soy/Koi.
 
         self.current_line = ["#include <stdio.h>\n"]
         self.current_name = ""
@@ -38,8 +43,41 @@ class KoiTranspiler(KoiListener):
     def exitBlock(self, ctx:KoiParser.BlockContext):
         self.current_line.append("}")
 
+    def enterImport_stmt(self, ctx:KoiParser.Import_stmtContext):
+        # TODO: Transpile imported Koi files and store the output in a temporary location then link to that instead
+        path = os.environ.get("SOY_LIB")
+
+        if ctx.CORE():
+            path += "\\core"
+
+        elif ctx.STANDARD():
+            path += "\\std"
+
+        for d in ctx.package_name().folders:
+            path += "\\" + d.text
+
+        last_path = path + "\\" + ctx.package_name().last.text
+        if os.path.isdir(last_path):
+            for f in os.listdir(last_path):
+                if f.endswith("c"):
+                    # TODO: Package/namespace imports
+                    pass
+                    # self.current_line.append("#include")
+                    # self.current_line.append("\"{}\"\n".format((last_path + "\\" + f).replace("\\", "\\\\")))
+
+        elif os.path.isfile(last_path + ".koi"):
+            if os.path.isfile(last_path + ".c"):
+                path += "\\" + ctx.package_name().last.text + ".c"
+
+            self.current_line.append("#include")
+            self.current_line.append("\"{}\"\n".format(path.replace("\\", "\\\\")))
+
     def enterFunction_block(self, ctx:KoiParser.Function_blockContext):
         self.current_line.append(ctx.returnType.getText())
+        self.current_line.append(ctx.name().getText())
+
+    def enterProcedure_block(self, ctx:KoiParser.Procedure_blockContext):
+        self.current_line.append("void")
         self.current_line.append(ctx.name().getText())
 
     def enterParameter_set(self, ctx:KoiParser.Parameter_setContext):
@@ -73,11 +111,13 @@ class KoiTranspiler(KoiListener):
 
     def enterFunction_call(self, ctx:KoiParser.Function_callContext):
         # TODO: Write the console library and add imports
-        if ctx.funcName.getText() in ["print", "println"]:
-            self.current_line.append("printf")
+        # if ctx.funcName.getText() in ["print", "println"]:
+        #     self.current_line.append("printf")
 
-        else:
-            self.current_line.append(ctx.funcName.getText())
+        # else:
+        #     self.current_line.append(ctx.funcName.getText())
+
+        self.current_line.append(ctx.funcName.getText())
 
         self.current_line.append("(")
 
@@ -92,12 +132,12 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(")")
         self.current_line.append(";")
 
-        if ctx.funcName.getText() == "println":
-            self.current_line.append("printf")
-            self.current_line.append("(")
-            self.current_line.append("\"\\n\"")
-            self.current_line.append(")")
-            self.current_line.append(";")
+        # if ctx.funcName.getText() == "println":
+        #     self.current_line.append("printf")
+        #     self.current_line.append("(")
+        #     self.current_line.append("\"\\n\"")
+        #     self.current_line.append(")")
+        #     self.current_line.append(";")
 
     def enterFor_block(self, ctx:KoiParser.For_blockContext):
         # FIXME: Fix in-line lists
