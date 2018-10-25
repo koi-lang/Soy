@@ -34,3 +34,24 @@ def extract_comparisons(ctx: KoiParser.Compa_listContext, parenthesis: bool = Fa
         comparisons.append(")")
 
     return comparisons
+
+
+def extract_paramaters(ctx: KoiParser.Call_parameter_setContext, parenthesis: bool = False):
+    parameters = []
+
+    if parenthesis:
+        parameters.append("(")
+
+    # TODO: Resolve the order of parameters
+    for v in ctx.paramValues:
+        parameters.append(v.getText())
+
+        if len(ctx.paramValues) > 0:
+            if ctx.paramValues.index(v) < len(ctx.paramValues) - 1:
+                parameters.append(",")
+
+    if parenthesis:
+        parameters.append(")")
+
+    return parameters
+

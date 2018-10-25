@@ -5,7 +5,7 @@ from typing import TextIO
 from .gen.KoiParser import KoiParser
 from .gen.KoiListener import KoiListener
 
-from .types import koi_to_c, extract_comparisons
+from .sanitize import koi_to_c, extract_comparisons, extract_paramaters
 
 
 class KoiTranspiler(KoiListener):
@@ -112,7 +112,12 @@ class KoiTranspiler(KoiListener):
 
     def enterFunction_block(self, ctx:KoiParser.Function_blockContext):
         self.current_line.append(ctx.returnType.getText())
-        self.current_line.append(ctx.name().getText())
+
+        self.current_name = ctx.name().getText()
+        if self.in_class:
+            self.current_name = self.secondary_name + "_" + self.current_name
+
+        self.current_line.append(self.current_name)
 
     def enterProcedure_block(self, ctx:KoiParser.Procedure_blockContext):
         self.current_line.append("void")
@@ -154,11 +159,21 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(")")
 
     def enterName(self, ctx:KoiParser.NameContext):
-        self.current_name = ctx.getText()
+        if ctx.THIS():
+            self.current_name = "*shape"
+
+        else:
+            self.current_name = ctx.getText()
 
     def enterReturn_stmt(self, ctx:KoiParser.Return_stmtContext):
         self.current_line.append("return")
-        self.current_line.append(ctx.true_value().getText())
+
+        if ctx.true_value().value().getText() == "this":
+            self.current_line.append("*shape")
+
+        else:
+            self.current_line.append(ctx.true_value().getText())
+
         self.current_line.append(";")
 
     def enterFunction_call(self, ctx:KoiParser.Function_callContext):
@@ -171,17 +186,9 @@ class KoiTranspiler(KoiListener):
 
         self.current_line.append(ctx.method_call().funcName.getText())
 
-        self.current_line.append("(")
+        for p in extract_paramaters(ctx.method_call().call_parameter_set(), True):
+            self.current_line.append(p)
 
-        # TODO: Resolve the order of parameters
-        for v in ctx.method_call().call_parameter_set().paramValues:
-            self.current_line.append(v.getText())
-
-            if len(ctx.method_call().call_parameter_set().paramValues) > 0:
-                if ctx.method_call().call_parameter_set().paramValues.index(v) < len(ctx.method_call().call_parameter_set().paramValues) - 1:
-                    self.current_line.append(",")
-
-        self.current_line.append(")")
         self.current_line.append(";")
 
         # if ctx.funcName.getText() == "println":
@@ -305,8 +312,7 @@ class KoiTranspiler(KoiListener):
 
     def enterClass_new(self, ctx:KoiParser.Class_newContext):
         # TODO: Allow classes to be bound to variables
-        # TODO: Pass through the parameters
-        # TODO: Allow chaining method calls
+        # TODO: Pass returned information to the next chained method
         self.current_line.append(ctx.className.getText())
         instance_name = "c" + str(self.class_id)
         self.current_line.append("c" + str(self.class_id))
@@ -315,4 +321,9 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(ctx.className.getText() + "_new" + "(&" + instance_name + ")")
         self.current_line.append(";")
 
+        for c in ctx.method_call():
 
+            self.current_line.append(ctx.className.getText() + "_" + c.getText().split("(")[0] + "(&" + instance_name + "," + "".join(extract_paramaters(c.call_parameter_set(), False)) + ")")
+            self.current_line.append(";")
+
+        self.class_id += 1
