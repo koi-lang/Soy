@@ -1,5 +1,6 @@
 import pathlib
 import os
+from typing import TextIO
 
 from .gen.KoiParser import KoiParser
 from .gen.KoiListener import KoiListener
@@ -8,11 +9,15 @@ from .types import koi_to_c, extract_comparisons
 
 
 class KoiTranspiler(KoiListener):
-    def __init__(self):
-        pathlib.Path("out").mkdir(exist_ok=True)
+    def __init__(self, file: TextIO = None):
         # TODO: Change to use the Koi file name
         # TODO: Create an associating header
-        self.file = open("out/main.c", "w")
+        if not file:
+            pathlib.Path("out").mkdir(exist_ok=True)
+            self.file = open("out/main.c", "w")
+
+        else:
+            self.file = file
 
         # Enviroment variables
         # SOY_HOME = A folder named "Soy". This is used to house the Soy install.
@@ -23,6 +28,9 @@ class KoiTranspiler(KoiListener):
         self.secondary_name = ""
 
         self.loop_name = "index"
+
+    def exitProgram(self, ctx:KoiParser.ProgramContext):
+        self.file.close()
 
     def exitLine(self, ctx:KoiParser.LineContext):
         self.file.write(" ".join(self.current_line))
@@ -66,8 +74,21 @@ class KoiTranspiler(KoiListener):
                     # self.current_line.append("\"{}\"\n".format((last_path + "\\" + f).replace("\\", "\\\\")))
 
         elif os.path.isfile(last_path + ".koi"):
+            # A file for C exists with the same name, must be a native thing ¯\_(ツ)_/¯
+            # TODO: Change this to acknowledge a native function if there is one, and have that point to the C file
             if os.path.isfile(last_path + ".c"):
                 path += "\\" + ctx.package_name().last.text + ".c"
+
+            # There's no C file, it must be a Koi file
+            else:
+                new_path = "\\".join(path.split("\\")[0:-1]) + "\\_" + path.split("\\")[-1] + "_compiled"
+                pathlib.Path(new_path).mkdir(exist_ok=True)
+                with open(new_path + "\\" + ctx.package_name().last.text + ".c", "w") as comp_file:
+                    from .transpile import transpile_file
+
+                    transpile_file(path + "\\" + ctx.package_name().last.text + ".koi", comp_file)
+
+                    path = comp_file.name
 
             self.current_line.append("#include")
             self.current_line.append("\"{}\"\n".format(path.replace("\\", "\\\\")))
