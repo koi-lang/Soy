@@ -9,7 +9,7 @@ from .types import koi_to_c, extract_comparisons
 
 
 class KoiTranspiler(KoiListener):
-    def __init__(self, file: TextIO = None):
+    def __init__(self, file: TextIO = None, transpile_locally: bool = True):
         # TODO: Change to use the Koi file name
         # TODO: Create an associating header
         if not file:
@@ -18,6 +18,8 @@ class KoiTranspiler(KoiListener):
 
         else:
             self.file = file
+
+        self.transpile_locally = transpile_locally
 
         # Enviroment variables
         # SOY_HOME = A folder named "Soy". This is used to house the Soy install.
@@ -66,12 +68,12 @@ class KoiTranspiler(KoiListener):
 
         last_path = path + "\\" + ctx.package_name().last.text
         if os.path.isdir(last_path):
-            for f in os.listdir(last_path):
-                if f.endswith("c"):
-                    # TODO: Package/namespace imports
-                    pass
-                    # self.current_line.append("#include")
-                    # self.current_line.append("\"{}\"\n".format((last_path + "\\" + f).replace("\\", "\\\\")))
+            pass
+            # for f in os.listdir(last_path):
+            #     if f.endswith("c"):
+            #         # TODO: Package/namespace imports
+            #         self.current_line.append("#include")
+            #         self.current_line.append("\"{}\"\n".format((last_path + "\\" + f).replace("\\", "\\\\")))
 
         elif os.path.isfile(last_path + ".koi"):
             # A file for C exists with the same name, must be a native thing ¯\_(ツ)_/¯
@@ -81,8 +83,13 @@ class KoiTranspiler(KoiListener):
 
             # There's no C file, it must be a Koi file
             else:
-                new_path = "\\".join(path.split("\\")[0:-1]) + "\\" + path.split("\\")[-1] + "\\_compiled"
-                pathlib.Path(new_path).mkdir(exist_ok=True)
+                if self.transpile_locally:
+                    new_path = "\\".join(path.split("\\")[0:-1]) + "\\" + path.split("\\")[-1] + "\\_compiled"
+                    pathlib.Path(new_path).mkdir(exist_ok=True)
+
+                else:
+                    new_path = "out"
+
                 with open(new_path + "\\" + ctx.package_name().last.text + ".c", "w") as comp_file:
                     from .transpile import transpile_file
 
@@ -91,7 +98,12 @@ class KoiTranspiler(KoiListener):
                     path = comp_file.name
 
             self.current_line.append("#include")
-            self.current_line.append("\"{}\"\n".format(path.replace("\\", "\\\\")))
+
+            if self.transpile_locally:
+                self.current_line.append("\"{}\"\n".format(path.replace("\\", "\\\\")))
+
+            else:
+                self.current_line.append("\"{}\"\n".format("".join(path.split("\\")[1:])))
 
     def enterFunction_block(self, ctx:KoiParser.Function_blockContext):
         self.current_line.append(ctx.returnType.getText())
@@ -216,6 +228,9 @@ class KoiTranspiler(KoiListener):
             self.current_line.append("[]")
 
         self.current_line.append("=")
+
+        if ctx.true_value().value().function_call():
+            return
 
         if ctx.true_value().getText().startswith("["):
             self.current_line.append("{")
