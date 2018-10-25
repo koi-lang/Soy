@@ -29,6 +29,9 @@ class KoiTranspiler(KoiListener):
         self.current_name = ""
         self.secondary_name = ""
 
+        self.in_class = False
+        self.class_id = 0
+
         self.loop_name = "index"
 
     def exitProgram(self, ctx:KoiParser.ProgramContext):
@@ -39,7 +42,8 @@ class KoiTranspiler(KoiListener):
         self.current_line = []
 
     def enterBlock(self, ctx:KoiParser.BlockContext):
-        self.current_line.append("{")
+        if type(ctx.parentCtx) is not KoiParser.Class_blockContext:
+            self.current_line.append("{")
 
         if type(ctx.parentCtx) is KoiParser.For_blockContext:
             self.current_line.append(self.secondary_name)
@@ -51,7 +55,8 @@ class KoiTranspiler(KoiListener):
             self.current_line.append(";")
 
     def exitBlock(self, ctx:KoiParser.BlockContext):
-        self.current_line.append("}")
+        if type(ctx.parentCtx) is not KoiParser.Class_blockContext:
+            self.current_line.append("}")
 
     def enterImport_stmt(self, ctx:KoiParser.Import_stmtContext):
         # TODO: Transpile imported Koi files and store the output in a temporary location then link to that instead
@@ -111,7 +116,12 @@ class KoiTranspiler(KoiListener):
 
     def enterProcedure_block(self, ctx:KoiParser.Procedure_blockContext):
         self.current_line.append("void")
-        self.current_line.append(ctx.name().getText())
+
+        self.current_name = ctx.name().getText()
+        if self.in_class:
+            self.current_name = self.secondary_name + "_" + self.current_name
+
+        self.current_line.append(self.current_name)
 
     def enterParameter_set(self, ctx:KoiParser.Parameter_setContext):
         self.current_line.append("(")
@@ -120,6 +130,15 @@ class KoiTranspiler(KoiListener):
 
         for i in ctx.parameter():
             params.append(i.name().getText())
+
+        if self.in_class:
+            self.current_line.append("const")
+            self.current_line.append(self.secondary_name)
+            self.current_line.append("*")
+            self.current_line.append("shape")
+
+            if len(params) > 0:
+                self.current_line.append(",")
 
         for p in ctx.parameter():
             self.current_line.append(koi_to_c(p.type_().getText()))
@@ -150,16 +169,16 @@ class KoiTranspiler(KoiListener):
         # else:
         #     self.current_line.append(ctx.funcName.getText())
 
-        self.current_line.append(ctx.funcName.getText())
+        self.current_line.append(ctx.method_call().funcName.getText())
 
         self.current_line.append("(")
 
         # TODO: Resolve the order of parameters
-        for v in ctx.paramValues:
+        for v in ctx.method_call().call_parameter_set().paramValues:
             self.current_line.append(v.getText())
 
-            if len(ctx.paramValues) > 0:
-                if ctx.paramValues.index(v) < len(ctx.paramValues) - 1:
+            if len(ctx.method_call().call_parameter_set().paramValues) > 0:
+                if ctx.method_call().call_parameter_set().paramValues.index(v) < len(ctx.method_call().call_parameter_set().paramValues) - 1:
                     self.current_line.append(",")
 
         self.current_line.append(")")
@@ -264,3 +283,36 @@ class KoiTranspiler(KoiListener):
 
     def enterElse_block(self, ctx:KoiParser.Else_blockContext):
         self.current_line.append("else")
+
+    def enterClass_block(self, ctx:KoiParser.Class_blockContext):
+        self.current_line.append("typedef")
+        self.current_line.append("struct")
+        self.current_line.append("{")
+
+        self.current_line.append("}")
+        self.current_line.append(ctx.name().getText())
+        self.current_line.append(";")
+
+        self.secondary_name = ctx.name().getText()
+        self.in_class = True
+
+    def exitClass_block(self, ctx:KoiParser.Class_blockContext):
+        self.in_class = False
+
+    def enterConstructor_block(self, ctx:KoiParser.Constructor_blockContext):
+        self.current_line.append("void")
+        self.current_line.append(self.current_name + "_new")
+
+    def enterClass_new(self, ctx:KoiParser.Class_newContext):
+        # TODO: Allow classes to be bound to variables
+        # TODO: Pass through the parameters
+        # TODO: Allow chaining method calls
+        self.current_line.append(ctx.className.getText())
+        instance_name = "c" + str(self.class_id)
+        self.current_line.append("c" + str(self.class_id))
+        self.current_line.append(";")
+
+        self.current_line.append(ctx.className.getText() + "_new" + "(&" + instance_name + ")")
+        self.current_line.append(";")
+
+
