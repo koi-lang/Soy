@@ -81,7 +81,7 @@ class KoiTranspiler(KoiListener):
 
             # There's no C file, it must be a Koi file
             else:
-                new_path = "\\".join(path.split("\\")[0:-1]) + "\\_" + path.split("\\")[-1] + "_compiled"
+                new_path = "\\".join(path.split("\\")[0:-1]) + "\\" + path.split("\\")[-1] + "\\_compiled"
                 pathlib.Path(new_path).mkdir(exist_ok=True)
                 with open(new_path + "\\" + ctx.package_name().last.text + ".c", "w") as comp_file:
                     from .transpile import transpile_file
