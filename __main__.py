@@ -5,7 +5,7 @@ from src.gen.KoiParser import KoiParser
 from src.koi_transpiler import KoiTranspiler
 
 if __name__ == "__main__":
-    lexer = KoiLexer(antlr4.FileStream("examples/src/variables.koi"))
+    lexer = KoiLexer(antlr4.FileStream("examples/src/if_statement.koi"))
     stream = antlr4.CommonTokenStream(lexer)
     parser = KoiParser(stream)
     tree = parser.program()

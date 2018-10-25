@@ -3,7 +3,7 @@ import pathlib
 from .gen.KoiParser import KoiParser
 from .gen.KoiListener import KoiListener
 
-from .types import *
+from .types import koi_to_c, extract_comparisons
 
 
 class KoiTranspiler(KoiListener):
@@ -166,3 +166,25 @@ class KoiTranspiler(KoiListener):
 
     def exitLocal_asstmt(self, ctx:KoiParser.Local_asstmtContext):
         self.current_line.append(";")
+
+    def enterIf_block(self, ctx:KoiParser.If_blockContext):
+        self.current_line.append("if")
+        # self.current_line.append("(")
+
+        for i in extract_comparisons(ctx.compa_list(), True):
+            self.current_line.append(i)
+
+        # self.current_line.append(")")
+
+    def enterElf_block(self, ctx:KoiParser.Elf_blockContext):
+        self.current_line.append("else")
+        self.current_line.append("if")
+        # self.current_line.append("(")
+
+        for i in extract_comparisons(ctx.compa_list(), True):
+            self.current_line.append(i)
+
+        # self.current_line.append(")")
+
+    def enterElse_block(self, ctx:KoiParser.Else_blockContext):
+        self.current_line.append("else")
