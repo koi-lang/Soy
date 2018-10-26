@@ -40,6 +40,8 @@ class KoiTranspiler(KoiListener):
         self.in_class_init = False
         self.init_place = None
 
+        self.quit_function = False
+
         self.loop_name = "index"
         self.instance_name = "instance"
 
@@ -193,6 +195,10 @@ class KoiTranspiler(KoiListener):
         # else:
         #     self.current_line.append(ctx.funcName.getText())
 
+        if self.quit_function:
+            self.quit_function = False
+            return
+
         for c in ctx.method_call():
             name = c.funcName.getText()
 
@@ -271,6 +277,8 @@ class KoiTranspiler(KoiListener):
 
         self.variable_dict[ctx.name().getText()] = koi_to_c(ctx.type_().getText())
 
+        self.quit_function = True
+
         if ctx.true_value().value().class_new():
             self.class_name = ctx.name().getText()
 
@@ -282,8 +290,9 @@ class KoiTranspiler(KoiListener):
 
                 assignment.append("=")
 
-            if ctx.true_value().value().function_call():
-                return
+            # if ctx.true_value().value().function_call():
+            #     assignment.append("=")
+            #     assignment.append(ctx.true_value().getText().replace("this.", self.instance_name + "->"))
 
             if ctx.true_value().getText().startswith("["):
                 assignment.append("{")
@@ -292,7 +301,8 @@ class KoiTranspiler(KoiListener):
 
             else:
                 assignment.append("=")
-                assignment.append(ctx.true_value().getText().replace("this.", self.instance_name + "->"))
+                assignment.append(ctx.true_value().getText().replace("this.", self.instance_name + "->").replace("call", ""))
+                assignment.append(";")
 
         if self.in_class_init:
             assignment.append(";")
