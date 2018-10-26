@@ -28,14 +28,20 @@ class KoiTranspiler(KoiListener):
         self.current_line = ["#include <stdio.h>\n"]
         self.current_name = ""
         self.secondary_name = ""
+        self.current_class = []
 
         self.variable_dict = {}
+        self.class_vars = []
 
         self.in_class = False
         self.class_id = 0
         self.class_name = None
 
+        self.in_class_init = False
+        self.init_place = None
+
         self.loop_name = "index"
+        self.instance_name = "instance"
 
     def exitProgram(self, ctx:KoiParser.ProgramContext):
         self.file.close()
@@ -45,7 +51,7 @@ class KoiTranspiler(KoiListener):
         self.current_line = []
 
     def enterBlock(self, ctx:KoiParser.BlockContext):
-        if type(ctx.parentCtx) is not KoiParser.Class_blockContext:
+        if type(ctx.parentCtx) is not KoiParser.Class_blockContext and type(ctx.parentCtx) is not KoiParser.Init_blockContext:
             self.current_line.append("{")
 
         if type(ctx.parentCtx) is KoiParser.For_blockContext:
@@ -58,7 +64,7 @@ class KoiTranspiler(KoiListener):
             self.current_line.append(";")
 
     def exitBlock(self, ctx:KoiParser.BlockContext):
-        if type(ctx.parentCtx) is not KoiParser.Class_blockContext:
+        if type(ctx.parentCtx) is not KoiParser.Class_blockContext and type(ctx.parentCtx) is not KoiParser.Init_blockContext:
             self.current_line.append("}")
 
     def enterImport_stmt(self, ctx:KoiParser.Import_stmtContext):
@@ -143,7 +149,7 @@ class KoiTranspiler(KoiListener):
             self.current_line.append("const")
             self.current_line.append(self.secondary_name)
             self.current_line.append("*")
-            self.current_line.append("shape")
+            self.current_line.append(self.instance_name)
 
             if len(params) > 0:
                 self.current_line.append(",")
@@ -163,7 +169,7 @@ class KoiTranspiler(KoiListener):
 
     def enterName(self, ctx:KoiParser.NameContext):
         if ctx.THIS():
-            self.current_name = "*shape"
+            self.current_name = "*" + self.instance_name
 
         else:
             self.current_name = ctx.getText()
@@ -172,7 +178,7 @@ class KoiTranspiler(KoiListener):
         self.current_line.append("return")
 
         if ctx.true_value().value().getText() == "this":
-            self.current_line.append("*shape")
+            self.current_line.append("*" + self.instance_name)
 
         else:
             self.current_line.append(ctx.true_value().getText())
@@ -261,35 +267,44 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(")")
 
     def enterLocal_asstmt(self, ctx:KoiParser.Local_asstmtContext):
-        self.current_line.append(koi_to_c(ctx.type_().getText()))
-        self.current_line.append(ctx.name().getText())
+        assignment = [koi_to_c(ctx.type_().getText()), ctx.name().getText().replace("this.", self.instance_name + "->")]
 
         self.variable_dict[ctx.name().getText()] = koi_to_c(ctx.type_().getText())
 
         if ctx.true_value().value().class_new():
             self.class_name = ctx.name().getText()
 
-            self.current_line.append(";")
+            assignment.append(";")
 
         else:
             if "[]" in ctx.type_().getText():
-                self.current_line.append("[]")
+                assignment.append("[]")
 
-            self.current_line.append("=")
+                assignment.append("=")
 
             if ctx.true_value().value().function_call():
                 return
 
             if ctx.true_value().getText().startswith("["):
-                self.current_line.append("{")
-                self.current_line.append(ctx.true_value().getText()[1:-1])
-                self.current_line.append("}")
+                assignment.append("{")
+                assignment.append(ctx.true_value().getText()[1:-1].replace("this.", self.instance_name + "->"))
+                assignment.append("}")
 
             else:
-                self.current_line.append(ctx.true_value().getText())
+                assignment.append("=")
+                assignment.append(ctx.true_value().getText().replace("this.", self.instance_name + "->"))
+
+        if self.in_class_init:
+            assignment.append(";")
+            self.class_vars.append(" ".join(assignment))
+            self.current_class.insert(self.init_place, " ".join(assignment).split("=")[0] + ";")
+
+        else:
+            self.current_line.append(" ".join(assignment))
 
     def exitLocal_asstmt(self, ctx:KoiParser.Local_asstmtContext):
-        self.current_line.append(";")
+        if not self.in_class_init:
+            self.current_line.append(";")
 
     def enterIf_block(self, ctx:KoiParser.If_blockContext):
         self.current_line.append("if")
@@ -314,13 +329,15 @@ class KoiTranspiler(KoiListener):
         self.current_line.append("else")
 
     def enterClass_block(self, ctx:KoiParser.Class_blockContext):
-        self.current_line.append("typedef")
-        self.current_line.append("struct")
-        self.current_line.append("{")
+        self.current_class.append("typedef")
+        self.current_class.append("struct")
+        self.current_class.append("{")
 
-        self.current_line.append("}")
-        self.current_line.append(ctx.name().getText())
-        self.current_line.append(";")
+        self.init_place = len(self.current_class)
+
+        self.current_class.append("}")
+        self.current_class.append(ctx.name().getText())
+        self.current_class.append(";")
 
         self.secondary_name = ctx.name().getText()
         self.in_class = True
@@ -330,7 +347,7 @@ class KoiTranspiler(KoiListener):
 
     def enterConstructor_block(self, ctx:KoiParser.Constructor_blockContext):
         self.current_line.append("void")
-        self.current_line.append(self.current_name + "_new")
+        self.current_line.append(self.secondary_name + "_new")
 
     def enterClass_new(self, ctx:KoiParser.Class_newContext):
         # TODO: Pass returned information to the next chained method
@@ -345,9 +362,40 @@ class KoiTranspiler(KoiListener):
 
             self.class_id += 1
 
+        self.current_line.append(ctx.className.getText() + "_init" + "(&" + instance_name + ")")
+        self.current_line.append(";")
         self.current_line.append(ctx.className.getText() + "_new" + "(&" + instance_name + ")")
         self.current_line.append(";")
 
         for c in ctx.method_call():
             self.current_line.append(ctx.className.getText() + "_" + c.getText().split("(")[0] + "(&" + instance_name + "," + "".join(extract_paramaters(c.call_parameter_set(), False)) + ")")
             self.current_line.append(";")
+
+    def enterInit_block(self, ctx:KoiParser.Init_blockContext):
+        self.in_class_init = True
+
+    def exitInit_block(self, ctx:KoiParser.Init_blockContext):
+        self.current_line.append(" ".join(self.current_class))
+
+        self.current_line.append("void")
+        self.current_line.append(self.secondary_name + "_init")
+        self.current_line.append("(")
+        self.current_line.append(self.secondary_name)
+        self.current_line.append("*")
+        self.current_line.append(self.instance_name)
+        self.current_line.append(")")
+        self.current_line.append("{")
+
+        new_vars = []
+        for i in self.class_vars:
+            split = i.replace("*", "").split(" ")
+            new_vars.append(self.instance_name)
+            new_vars.append("->")
+            new_vars.append(" ".join(split[1:-1]))
+            new_vars.append(";")
+
+        self.current_line.append(" ".join(new_vars))
+        self.current_line.append("}")
+
+        self.current_class = []
+        self.in_class_init = False
