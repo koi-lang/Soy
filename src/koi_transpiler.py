@@ -29,8 +29,11 @@ class KoiTranspiler(KoiListener):
         self.current_name = ""
         self.secondary_name = ""
 
+        self.variable_dict = {}
+
         self.in_class = False
         self.class_id = 0
+        self.class_name = None
 
         self.loop_name = "index"
 
@@ -184,12 +187,23 @@ class KoiTranspiler(KoiListener):
         # else:
         #     self.current_line.append(ctx.funcName.getText())
 
-        self.current_line.append(ctx.method_call().funcName.getText())
+        for c in ctx.method_call():
+            name = c.funcName.getText()
 
-        for p in extract_paramaters(ctx.method_call().call_parameter_set(), True):
-            self.current_line.append(p)
+            if ctx.name():
+                name = self.variable_dict[ctx.name().getText()] + "_" + name
 
-        self.current_line.append(";")
+            self.current_line.append(name)
+
+            params = extract_paramaters(c.call_parameter_set(), True)
+
+            if ctx.name():
+                params.insert(1, " ".join(["&" + ctx.name().getText(), ","]))
+
+            for p in params:
+                self.current_line.append(p)
+
+            self.current_line.append(";")
 
         # if ctx.funcName.getText() == "println":
         #     self.current_line.append("printf")
@@ -250,21 +264,29 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(koi_to_c(ctx.type_().getText()))
         self.current_line.append(ctx.name().getText())
 
-        if "[]" in ctx.type_().getText():
-            self.current_line.append("[]")
+        self.variable_dict[ctx.name().getText()] = koi_to_c(ctx.type_().getText())
 
-        self.current_line.append("=")
+        if ctx.true_value().value().class_new():
+            self.class_name = ctx.name().getText()
 
-        if ctx.true_value().value().function_call():
-            return
-
-        if ctx.true_value().getText().startswith("["):
-            self.current_line.append("{")
-            self.current_line.append(ctx.true_value().getText()[1:-1])
-            self.current_line.append("}")
+            self.current_line.append(";")
 
         else:
-            self.current_line.append(ctx.true_value().getText())
+            if "[]" in ctx.type_().getText():
+                self.current_line.append("[]")
+
+            self.current_line.append("=")
+
+            if ctx.true_value().value().function_call():
+                return
+
+            if ctx.true_value().getText().startswith("["):
+                self.current_line.append("{")
+                self.current_line.append(ctx.true_value().getText()[1:-1])
+                self.current_line.append("}")
+
+            else:
+                self.current_line.append(ctx.true_value().getText())
 
     def exitLocal_asstmt(self, ctx:KoiParser.Local_asstmtContext):
         self.current_line.append(";")
@@ -311,19 +333,21 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(self.current_name + "_new")
 
     def enterClass_new(self, ctx:KoiParser.Class_newContext):
-        # TODO: Allow classes to be bound to variables
         # TODO: Pass returned information to the next chained method
-        self.current_line.append(ctx.className.getText())
-        instance_name = "c" + str(self.class_id)
-        self.current_line.append("c" + str(self.class_id))
-        self.current_line.append(";")
+        if self.class_name:
+            instance_name = self.class_name
+
+        else:
+            self.current_line.append(ctx.className.getText())
+            instance_name = "c" + str(self.class_id)
+            self.current_line.append("c" + str(self.class_id))
+            self.current_line.append(";")
+
+            self.class_id += 1
 
         self.current_line.append(ctx.className.getText() + "_new" + "(&" + instance_name + ")")
         self.current_line.append(";")
 
         for c in ctx.method_call():
-
             self.current_line.append(ctx.className.getText() + "_" + c.getText().split("(")[0] + "(&" + instance_name + "," + "".join(extract_paramaters(c.call_parameter_set(), False)) + ")")
             self.current_line.append(";")
-
-        self.class_id += 1
