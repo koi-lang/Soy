@@ -25,7 +25,7 @@ class KoiTranspiler(KoiListener):
         # SOY_HOME = A folder named "Soy". This is used to house the Soy install.
         # SOY_LIB = A folder in SOY_HOME, called "lib". This is used to house the core and standard libraries for Soy/Koi.
 
-        self.current_line = ["#include <stdio.h>\n"]
+        self.current_line = ["#include <stdio.h>\n#include <limits.h>\n"]
         self.current_name = ""
         self.secondary_name = ""
         self.current_class = []
@@ -41,6 +41,8 @@ class KoiTranspiler(KoiListener):
         self.init_place = None
 
         self.quit_function = False
+
+        self.points = []
 
         self.loop_name = "index"
         self.instance_name = "instance"
@@ -277,7 +279,8 @@ class KoiTranspiler(KoiListener):
 
         self.variable_dict[ctx.name().getText()] = koi_to_c(ctx.type_().getText())
 
-        self.quit_function = True
+        if ctx.true_value().value().function_call():
+            self.quit_function = True
 
         if ctx.true_value().value().class_new():
             self.class_name = ctx.name().getText()
@@ -409,3 +412,45 @@ class KoiTranspiler(KoiListener):
 
         self.current_class = []
         self.in_class_init = False
+
+    def enterWhen_block(self, ctx:KoiParser.When_blockContext):
+        self.current_line.append("switch")
+        self.current_line.append("(")
+        self.current_line.append(ctx.true_value().getText())
+        self.current_line.append(")")
+        self.current_line.append("{")
+
+    def exitWhen_block(self, ctx:KoiParser.When_blockContext):
+        self.current_line.append("}")
+
+    def enterIs_block(self, ctx:KoiParser.Is_blockContext):
+        self.current_line.append("case")
+
+        if ctx.half_compa():
+            if ctx.half_compa().comp.text == "<":
+                self.current_line.append("INT_MIN")
+                self.current_line.append("...")
+                self.current_line.append(ctx.half_compa().getText().split("<")[-1])
+
+            elif ctx.half_compa().comp.text == ">":
+                self.current_line.append(ctx.half_compa().getText().split(">")[-1])
+                self.current_line.append("...")
+                self.current_line.append("INT_MAX")
+
+        else:
+            self.current_line.append(ctx.true_value().getText())
+
+        self.current_line.append(":")
+
+    def exitIs_block(self, ctx:KoiParser.Is_blockContext):
+        self.current_line.append("break")
+        self.current_line.append(";")
+
+    def enterWhen_else(self, ctx:KoiParser.When_elseContext):
+        self.current_line.append("default")
+        self.current_line.append(":")
+
+    def exitWhen_else(self, ctx:KoiParser.When_elseContext):
+        self.current_line.append("break")
+        self.current_line.append(";")
+
