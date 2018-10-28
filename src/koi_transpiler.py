@@ -427,13 +427,22 @@ class KoiTranspiler(KoiListener):
         self.current_line.append("case")
 
         if ctx.half_compa():
-            if ctx.half_compa().comp.text == "<":
+            if ctx.half_compa().comp.text == "<" or ctx.half_compa().comp.text == "<=":
                 self.current_line.append("INT_MIN")
                 self.current_line.append("...")
-                self.current_line.append(ctx.half_compa().getText().split("<")[-1])
+                self.current_line.append(ctx.half_compa().getText().replace("<", "").replace("=", ""))
 
-            elif ctx.half_compa().comp.text == ">":
-                self.current_line.append(ctx.half_compa().getText().split(">")[-1])
+                if "=" not in ctx.half_compa().comp.text:
+                    self.current_line.append("-")
+                    self.current_line.append("1")
+
+            elif ctx.half_compa().comp.text == ">" or ctx.half_compa().comp.text == ">=":
+                self.current_line.append(ctx.half_compa().getText().replace(">", "").replace("=", ""))
+
+                if "=" not in ctx.half_compa().comp.text:
+                    self.current_line.append("+")
+                    self.current_line.append("1")
+
                 self.current_line.append("...")
                 self.current_line.append("INT_MAX")
 
