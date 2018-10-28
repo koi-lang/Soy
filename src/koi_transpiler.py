@@ -25,7 +25,7 @@ class KoiTranspiler(KoiListener):
         # SOY_HOME = A folder named "Soy". This is used to house the Soy install.
         # SOY_LIB = A folder in SOY_HOME, called "lib". This is used to house the core and standard libraries for Soy/Koi.
 
-        self.current_line = ["#include <stdio.h>\n#include <limits.h>\n"]
+        self.current_line = ["#include <stdio.h>\n#include <limits.h>\n#include <stdbool.h>\n"]
         self.current_name = ""
         self.secondary_name = ""
         self.current_class = []
@@ -190,7 +190,6 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(";")
 
     def enterFunction_call(self, ctx:KoiParser.Function_callContext):
-        # TODO: Write the console library and add imports
         # if ctx.funcName.getText() in ["print", "println"]:
         #     self.current_line.append("printf")
 
@@ -199,6 +198,9 @@ class KoiTranspiler(KoiListener):
 
         if self.quit_function:
             self.quit_function = False
+            return
+
+        if type(ctx.parentCtx) is KoiParser.ValueContext:
             return
 
         for c in ctx.method_call():
@@ -275,9 +277,13 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(")")
 
     def enterLocal_asstmt(self, ctx:KoiParser.Local_asstmtContext):
-        assignment = [koi_to_c(ctx.type_().getText()), ctx.name().getText().replace("this.", self.instance_name + "->")]
+        assignment = []
 
-        self.variable_dict[ctx.name().getText()] = koi_to_c(ctx.type_().getText())
+        if ctx.type_():
+            assignment.append(koi_to_c(ctx.type_().getText()))
+            self.variable_dict[ctx.name().getText()] = koi_to_c(ctx.type_().getText())
+
+        assignment.append(ctx.name().getText().replace("this.", self.instance_name + "->"))
 
         if ctx.true_value().value().function_call():
             self.quit_function = True
@@ -288,7 +294,7 @@ class KoiTranspiler(KoiListener):
             assignment.append(";")
 
         else:
-            if "[]" in ctx.type_().getText():
+            if ctx.type_() and "[]" in ctx.type_().getText():
                 assignment.append("[]")
 
                 assignment.append("=")

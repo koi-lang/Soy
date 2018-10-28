@@ -44,7 +44,7 @@ def extract_paramaters(ctx: KoiParser.Call_parameter_setContext, parenthesis: bo
 
     # TODO: Resolve the order of parameters
     for v in ctx.paramValues:
-        parameters.append(v.getText().replace("this.", "instance->"))
+        parameters.append(v.getText().replace("this.", "instance->").replace("call", ""))
 
         if len(ctx.paramValues) > 0:
             if ctx.paramValues.index(v) < len(ctx.paramValues) - 1:
