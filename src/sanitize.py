@@ -12,6 +12,10 @@ def koi_to_c(type_: str) -> str:
         return type_.split("[]")[0]
 
 
+def extract_name(name: str, instance_name=""):
+    return name.replace("this.", instance_name + "->").replace("call", "")
+
+
 def extract_comparisons(ctx: KoiParser.Compa_listContext, parenthesis: bool = False) -> List[str]:
     comparisons = []
 

@@ -469,3 +469,17 @@ class KoiTranspiler(KoiListener):
         self.current_line.append("break")
         self.current_line.append(";")
 
+    def enterEnum_block(self, ctx:KoiParser.Enum_blockContext):
+        # TODO: Move enum values to their own "scope"
+        self.current_line.append("typedef")
+        self.current_line.append("enum")
+        self.current_line.append(ctx.name().getText())
+        self.current_line.append("{")
+
+        for i in ctx.ID():
+            self.current_line.append(i.getText())
+            self.current_line.append(",")
+
+        self.current_line.append("}")
+        self.current_line.append(ctx.name().getText())
+        self.current_line.append(";")
