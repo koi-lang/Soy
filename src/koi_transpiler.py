@@ -285,19 +285,20 @@ class KoiTranspiler(KoiListener):
 
         assignment.append(ctx.name().getText().replace("this.", self.instance_name + "->"))
 
-        if ctx.true_value().value().function_call():
-            self.quit_function = True
+        if ctx.true_value():
+            if ctx.true_value().value().function_call():
+                self.quit_function = True
 
-        if ctx.true_value().value().class_new():
-            self.class_name = ctx.name().getText()
+            if ctx.true_value().value().class_new():
+                self.class_name = ctx.name().getText()
 
-            assignment.append(";")
+                assignment.append(";")
 
-        else:
-            if ctx.type_() and "[]" in ctx.type_().getText():
-                assignment.append("[]")
+            else:
+                if ctx.type_() and "[]" in ctx.type_().getText():
+                    assignment.append("[]")
 
-                assignment.append("=")
+                    assignment.append("=")
 
             # if ctx.true_value().value().function_call():
             #     assignment.append("=")
@@ -479,6 +480,21 @@ class KoiTranspiler(KoiListener):
         for i in ctx.ID():
             self.current_line.append(i.getText())
             self.current_line.append(",")
+
+        self.current_line.append("}")
+        self.current_line.append(ctx.name().getText())
+        self.current_line.append(";")
+
+    def enterStruct_block(self, ctx:KoiParser.Struct_blockContext):
+        self.current_line.append("typedef")
+        self.current_line.append("struct")
+        self.current_line.append(ctx.name().getText())
+        self.current_line.append("{")
+
+        for i in ctx.struct_set():
+            self.current_line.append(koi_to_c(i.type_().getText()))
+            self.current_line.append(i.name().getText())
+            self.current_line.append(";")
 
         self.current_line.append("}")
         self.current_line.append(ctx.name().getText())
