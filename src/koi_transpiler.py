@@ -145,12 +145,17 @@ class KoiTranspiler(KoiListener):
                 else:
                     new_path = "out"
 
-                with open(new_path + "\\" + ctx.package_name().last.text + ".c", "w") as comp_file:
-                    from .transpile import transpile_file
+                newest_path = new_path + "\\" + ctx.package_name().last.text + ".c"
+                if not os.path.isfile(newest_path):
+                    with open(newest_path, "w") as comp_file:
+                        from .transpile import transpile_file
 
-                    transpile_file(path + "\\" + ctx.package_name().last.text + ".koi", comp_file)
+                        transpile_file(path + "\\" + ctx.package_name().last.text + ".koi", comp_file)
 
-                    path = comp_file.name
+                        path = comp_file.name
+
+                else:
+                    path = newest_path
 
             import_path = "#include"
 
