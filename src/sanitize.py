@@ -3,7 +3,7 @@ from typing import List
 from .gen.KoiParser import KoiParser
 
 
-def koi_to_c(type_: str) -> str:
+def type_to_c(type_: str) -> str:
     # TODO: Finish of the converted types
     if type_.startswith("str"):
         return "char*"
@@ -13,10 +13,12 @@ def koi_to_c(type_: str) -> str:
 
 
 def extract_name(name: str, type_: str, instance_name="") -> str:
-    new_name = name.replace("this.", instance_name + "->").replace("call", "")
+    new_name = name.replace("this.", instance_name + "->").replace("call", "").replace("new", "")
 
     if "\"" in name and type_ == "char":
         new_name = new_name.replace("\"", "'")
+
+    new_name = new_name.replace("none", "NULL")
 
     return new_name
 

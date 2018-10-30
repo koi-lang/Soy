@@ -5,7 +5,7 @@ from typing import TextIO
 from .gen.KoiParser import KoiParser
 from .gen.KoiListener import KoiListener
 
-from .sanitize import koi_to_c, extract_name, extract_comparisons, extract_paramaters
+from .sanitize import type_to_c, extract_name, extract_comparisons, extract_paramaters
 
 
 class KoiTranspiler(KoiListener):
@@ -25,7 +25,7 @@ class KoiTranspiler(KoiListener):
         # SOY_HOME = A folder named "Soy". This is used to house the Soy install.
         # SOY_LIB = A folder in SOY_HOME, called "lib". This is used to house the core and standard libraries for Soy/Koi.
 
-        self.current_line = ["#include <stdio.h>\n#include <limits.h>\n#include <stdbool.h>\n"]
+        self.current_line = ["#include <stdio.h>\n#include <limits.h>\n#include <stdbool.h>\n#include <stddef.h>\n"]
         self.current_name = ""
         self.secondary_name = ""
         self.current_class = []
@@ -159,7 +159,7 @@ class KoiTranspiler(KoiListener):
                 self.current_line.append(",")
 
         for p in ctx.parameter():
-            self.current_line.append(koi_to_c(p.type_().getText()))
+            self.current_line.append(type_to_c(p.type_().getText()))
             self.current_line.append(p.name().getText())
 
             if "[]" in p.type_().getText():
@@ -190,11 +190,14 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(";")
 
     def enterFunction_call(self, ctx:KoiParser.Function_callContext):
+        # print(ctx.getText(), self.variable_dict)
         # if ctx.funcName.getText() in ["print", "println"]:
         #     self.current_line.append("printf")
 
         # else:
         #     self.current_line.append(ctx.funcName.getText())
+
+        class_call = False
 
         if self.quit_function:
             self.quit_function = False
@@ -206,15 +209,20 @@ class KoiTranspiler(KoiListener):
         for c in ctx.method_call():
             name = c.funcName.getText()
 
-            if ctx.name():
-                name = self.variable_dict[ctx.name().getText()] + "_" + name
+            if self.variable_dict.get(name.split(".")[0]):
+                class_call = True
+
+            if class_call:
+                split = name.split(".")
+                class_name = split[0]
+                name = self.variable_dict[class_name] + "_" + name.split(".")[-1]
 
             self.current_line.append(name)
 
             params = extract_paramaters(c.call_parameter_set(), True)
 
-            if ctx.name():
-                params.insert(1, " ".join(["&" + ctx.name().getText(), ","]))
+            if class_call:
+                params.insert(1, " ".join(["&" + class_name, ","]))
 
             for p in params:
                 self.current_line.append(p)
@@ -235,7 +243,7 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(self.loop_name)
         self.current_line.append(";")
 
-        self.current_line.append(koi_to_c(ctx.type_().getText()))
+        self.current_line.append(type_to_c(ctx.type_().getText()))
         self.current_line.append(self.current_name)
         self.current_line.append(";")
 
@@ -282,8 +290,8 @@ class KoiTranspiler(KoiListener):
         my_type = ""
 
         if ctx.type_():
-            assignment.append(koi_to_c(ctx.type_().getText()))
-            self.variable_dict[ctx.name().getText()] = koi_to_c(ctx.type_().getText())
+            assignment.append(type_to_c(ctx.type_().getText()))
+            self.variable_dict[ctx.name().getText()] = type_to_c(ctx.type_().getText())
 
             my_type = ctx.type_().getText()
 
@@ -314,9 +322,10 @@ class KoiTranspiler(KoiListener):
                 assignment.append("}")
 
             else:
-                assignment.append("=")
-                assignment.append(extract_name(ctx.true_value().getText(), my_type))
-                assignment.append(";")
+                if not ctx.true_value().value().class_new():
+                    assignment.append("=")
+                    assignment.append(extract_name(ctx.true_value().getText(), my_type))
+                    assignment.append(";")
 
         if self.in_class_init:
             assignment.append(";")
@@ -496,7 +505,7 @@ class KoiTranspiler(KoiListener):
         self.current_line.append("{")
 
         for i in ctx.struct_set():
-            self.current_line.append(koi_to_c(i.type_().getText()))
+            self.current_line.append(type_to_c(i.type_().getText()))
             self.current_line.append(i.name().getText())
             self.current_line.append(";")
 
