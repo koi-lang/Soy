@@ -25,13 +25,20 @@ class KoiTranspiler(KoiListener):
         # SOY_HOME = A folder named "Soy". This is used to house the Soy install.
         # SOY_LIB = A folder in SOY_HOME, called "lib". This is used to house the core and standard libraries for Soy/Koi.
 
-        self.current_line = ["#include <stdio.h>\n#include <limits.h>\n#include <stdbool.h>\n#include <stddef.h>\n"]
+        self.file_contents = []
+
+        self.current_line = []
         self.current_name = ""
         self.secondary_name = ""
         self.current_class = []
 
         self.variable_dict = {}
         self.class_vars = []
+
+        self.all_names = []
+        self.define_name = ""
+
+        self.imports = []
 
         self.in_class = False
         self.class_id = 0
@@ -48,11 +55,41 @@ class KoiTranspiler(KoiListener):
         self.instance_name = "instance"
 
     def exitProgram(self, ctx:KoiParser.ProgramContext):
+        for core in ["stdio.h", "limits.h", "stdbool.h", "stddef.h"]:
+            self.file.write(f"#include <{core}>\n")
+
+        # for name in self.all_names:
+        #     self.file.write(f"#undef {name}\n")
+
+        for import_ in self.imports:
+            self.file.write(import_)
+
+        if self.define_name != "":
+            self.file_contents.append([f"\n#define {self.define_name}", "\n#endif"])
+            self.define_name = ""
+
+        self.file.write(" ".join(" ".join(line) for line in self.file_contents))
+
         self.file.close()
 
     def exitLine(self, ctx:KoiParser.LineContext):
-        self.file.write(" ".join(self.current_line))
+        # self.file.write(" ".join(self.current_line))
+
+        self.file_contents.append(self.current_line)
         self.current_line = []
+
+    def enterName(self, ctx:KoiParser.NameContext):
+        if ctx.getText() not in self.all_names:
+            if type(ctx.parentCtx) in [KoiParser.Function_blockContext, KoiParser.Procedure_blockContext, KoiParser.Enum_blockContext]:
+                self.define_name = ctx.getText().upper() + "_EXISTS"
+                self.current_line.insert(0, f"#ifndef {self.define_name}\n")
+                self.all_names.append(ctx.getText())
+
+        if ctx.THIS():
+            self.current_name = "*" + self.instance_name
+
+        else:
+            self.current_name = ctx.getText()
 
     def enterBlock(self, ctx:KoiParser.BlockContext):
         if type(ctx.parentCtx) is not KoiParser.Class_blockContext and type(ctx.parentCtx) is not KoiParser.Init_blockContext:
@@ -115,13 +152,19 @@ class KoiTranspiler(KoiListener):
 
                     path = comp_file.name
 
-            self.current_line.append("#include")
+            import_path = "#include"
+
+            # self.current_line.append("#include")
 
             if self.transpile_locally:
-                self.current_line.append("\"{}\"\n".format(path.replace("\\", "\\\\")))
+                # self.current_line.append("\"{}\"\n".format(path.replace("\\", "\\\\")))
+                import_path += "\"{}\"\n".format(path.replace("\\", "\\\\"))
 
             else:
-                self.current_line.append("\"{}\"\n".format("".join(path.split("\\")[1:])))
+                # self.current_line.append("\"{}\"\n".format("".join(path.split("\\")[1:])))
+                import_path += "\"{}\"\n".format("".join(path.split("\\")[1:]))
+
+            self.imports.append(import_path)
 
     def enterFunction_block(self, ctx:KoiParser.Function_blockContext):
         self.current_line.append(ctx.returnType.getText())
@@ -170,13 +213,6 @@ class KoiTranspiler(KoiListener):
 
     def exitParameter_set(self, ctx:KoiParser.Parameter_setContext):
         self.current_line.append(")")
-
-    def enterName(self, ctx:KoiParser.NameContext):
-        if ctx.THIS():
-            self.current_name = "*" + self.instance_name
-
-        else:
-            self.current_name = ctx.getText()
 
     def enterReturn_stmt(self, ctx:KoiParser.Return_stmtContext):
         self.current_line.append("return")
@@ -491,6 +527,9 @@ class KoiTranspiler(KoiListener):
         self.current_line.append("{")
 
         for i in ctx.ID():
+            if i.getText() not in self.all_names:
+                self.all_names.append(i.getText())
+
             self.current_line.append(i.getText())
             self.current_line.append(",")
 
