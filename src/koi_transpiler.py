@@ -5,7 +5,7 @@ from typing import TextIO
 from .gen.KoiParser import KoiParser
 from .gen.KoiListener import KoiListener
 
-from .sanitize import koi_to_c, extract_comparisons, extract_paramaters
+from .sanitize import type_to_c, extract_name, extract_comparisons, extract_paramaters
 
 
 class KoiTranspiler(KoiListener):
@@ -21,17 +21,24 @@ class KoiTranspiler(KoiListener):
 
         self.transpile_locally = transpile_locally
 
-        # Enviroment variables
+        # Enviroment variables:
         # SOY_HOME = A folder named "Soy". This is used to house the Soy install.
         # SOY_LIB = A folder in SOY_HOME, called "lib". This is used to house the core and standard libraries for Soy/Koi.
 
-        self.current_line = ["#include <stdio.h>\n"]
+        self.file_contents = []
+
+        self.current_line = []
         self.current_name = ""
         self.secondary_name = ""
         self.current_class = []
 
         self.variable_dict = {}
         self.class_vars = []
+
+        self.all_names = []
+        self.define_name = ""
+
+        self.imports = []
 
         self.in_class = False
         self.class_id = 0
@@ -42,15 +49,47 @@ class KoiTranspiler(KoiListener):
 
         self.quit_function = False
 
+        self.points = []
+
         self.loop_name = "index"
         self.instance_name = "instance"
 
     def exitProgram(self, ctx:KoiParser.ProgramContext):
+        for core in ["stdio.h", "limits.h", "stdbool.h", "stddef.h"]:
+            self.file.write(f"#include <{core}>\n")
+
+        # for name in self.all_names:
+        #     self.file.write(f"#undef {name}\n")
+
+        for import_ in self.imports:
+            self.file.write(import_)
+
+        if self.define_name != "":
+            self.file_contents.append([f"\n#define {self.define_name}", "\n#endif"])
+            self.define_name = ""
+
+        self.file.write(" ".join(" ".join(line) for line in self.file_contents))
+
         self.file.close()
 
     def exitLine(self, ctx:KoiParser.LineContext):
-        self.file.write(" ".join(self.current_line))
+        # self.file.write(" ".join(self.current_line))
+
+        self.file_contents.append(self.current_line)
         self.current_line = []
+
+    def enterName(self, ctx:KoiParser.NameContext):
+        if ctx.getText() not in self.all_names:
+            if type(ctx.parentCtx) in [KoiParser.Function_blockContext, KoiParser.Procedure_blockContext, KoiParser.Enum_blockContext]:
+                self.define_name = ctx.getText().upper() + "_EXISTS"
+                self.current_line.insert(0, f"#ifndef {self.define_name}\n")
+                self.all_names.append(ctx.getText())
+
+        if ctx.THIS():
+            self.current_name = "*" + self.instance_name
+
+        else:
+            self.current_name = ctx.getText()
 
     def enterBlock(self, ctx:KoiParser.BlockContext):
         if type(ctx.parentCtx) is not KoiParser.Class_blockContext and type(ctx.parentCtx) is not KoiParser.Init_blockContext:
@@ -106,20 +145,31 @@ class KoiTranspiler(KoiListener):
                 else:
                     new_path = "out"
 
-                with open(new_path + "\\" + ctx.package_name().last.text + ".c", "w") as comp_file:
-                    from .transpile import transpile_file
+                newest_path = new_path + "\\" + ctx.package_name().last.text + ".c"
+                if not os.path.isfile(newest_path):
+                    with open(newest_path, "w") as comp_file:
+                        from .transpile import transpile_file
 
-                    transpile_file(path + "\\" + ctx.package_name().last.text + ".koi", comp_file)
+                        transpile_file(path + "\\" + ctx.package_name().last.text + ".koi", comp_file)
 
-                    path = comp_file.name
+                        path = comp_file.name
 
-            self.current_line.append("#include")
+                else:
+                    path = newest_path
+
+            import_path = "#include"
+
+            # self.current_line.append("#include")
 
             if self.transpile_locally:
-                self.current_line.append("\"{}\"\n".format(path.replace("\\", "\\\\")))
+                # self.current_line.append("\"{}\"\n".format(path.replace("\\", "\\\\")))
+                import_path += "\"{}\"\n".format(path.replace("\\", "\\\\"))
 
             else:
-                self.current_line.append("\"{}\"\n".format("".join(path.split("\\")[1:])))
+                # self.current_line.append("\"{}\"\n".format("".join(path.split("\\")[1:])))
+                import_path += "\"{}\"\n".format("".join(path.split("\\")[1:]))
+
+            self.imports.append(import_path)
 
     def enterFunction_block(self, ctx:KoiParser.Function_blockContext):
         self.current_line.append(ctx.returnType.getText())
@@ -157,7 +207,7 @@ class KoiTranspiler(KoiListener):
                 self.current_line.append(",")
 
         for p in ctx.parameter():
-            self.current_line.append(koi_to_c(p.type_().getText()))
+            self.current_line.append(type_to_c(p.type_().getText()))
             self.current_line.append(p.name().getText())
 
             if "[]" in p.type_().getText():
@@ -168,13 +218,6 @@ class KoiTranspiler(KoiListener):
 
     def exitParameter_set(self, ctx:KoiParser.Parameter_setContext):
         self.current_line.append(")")
-
-    def enterName(self, ctx:KoiParser.NameContext):
-        if ctx.THIS():
-            self.current_name = "*" + self.instance_name
-
-        else:
-            self.current_name = ctx.getText()
 
     def enterReturn_stmt(self, ctx:KoiParser.Return_stmtContext):
         self.current_line.append("return")
@@ -188,29 +231,39 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(";")
 
     def enterFunction_call(self, ctx:KoiParser.Function_callContext):
-        # TODO: Write the console library and add imports
+        # print(ctx.getText(), self.variable_dict)
         # if ctx.funcName.getText() in ["print", "println"]:
         #     self.current_line.append("printf")
 
         # else:
         #     self.current_line.append(ctx.funcName.getText())
 
+        class_call = False
+
         if self.quit_function:
             self.quit_function = False
+            return
+
+        if type(ctx.parentCtx) is KoiParser.ValueContext:
             return
 
         for c in ctx.method_call():
             name = c.funcName.getText()
 
-            if ctx.name():
-                name = self.variable_dict[ctx.name().getText()] + "_" + name
+            if self.variable_dict.get(name.split(".")[0]):
+                class_call = True
+
+            if class_call:
+                split = name.split(".")
+                class_name = split[0]
+                name = self.variable_dict[class_name] + "_" + name.split(".")[-1]
 
             self.current_line.append(name)
 
             params = extract_paramaters(c.call_parameter_set(), True)
 
-            if ctx.name():
-                params.insert(1, " ".join(["&" + ctx.name().getText(), ","]))
+            if class_call:
+                params.insert(1, " ".join(["&" + class_name, ","]))
 
             for p in params:
                 self.current_line.append(p)
@@ -231,7 +284,7 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(self.loop_name)
         self.current_line.append(";")
 
-        self.current_line.append(koi_to_c(ctx.type_().getText()))
+        self.current_line.append(type_to_c(ctx.type_().getText()))
         self.current_line.append(self.current_name)
         self.current_line.append(";")
 
@@ -273,22 +326,32 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(")")
 
     def enterLocal_asstmt(self, ctx:KoiParser.Local_asstmtContext):
-        assignment = [koi_to_c(ctx.type_().getText()), ctx.name().getText().replace("this.", self.instance_name + "->")]
+        assignment = []
 
-        self.variable_dict[ctx.name().getText()] = koi_to_c(ctx.type_().getText())
+        my_type = ""
 
-        self.quit_function = True
+        if ctx.type_():
+            assignment.append(type_to_c(ctx.type_().getText()))
+            self.variable_dict[ctx.name().getText()] = type_to_c(ctx.type_().getText())
 
-        if ctx.true_value().value().class_new():
-            self.class_name = ctx.name().getText()
+            my_type = ctx.type_().getText()
 
-            assignment.append(";")
+        assignment.append(extract_name(ctx.name().getText(), my_type, self.instance_name))
 
-        else:
-            if "[]" in ctx.type_().getText():
-                assignment.append("[]")
+        if ctx.true_value():
+            if ctx.true_value().value().function_call():
+                self.quit_function = True
 
-                assignment.append("=")
+            if ctx.true_value().value().class_new():
+                self.class_name = ctx.name().getText()
+
+                assignment.append(";")
+
+            else:
+                if ctx.type_() and "[]" in ctx.type_().getText():
+                    assignment.append("[]")
+
+                    assignment.append("=")
 
             # if ctx.true_value().value().function_call():
             #     assignment.append("=")
@@ -296,13 +359,14 @@ class KoiTranspiler(KoiListener):
 
             if ctx.true_value().getText().startswith("["):
                 assignment.append("{")
-                assignment.append(ctx.true_value().getText()[1:-1].replace("this.", self.instance_name + "->"))
+                assignment.append(extract_name(ctx.true_value().getText()[1:-1], my_type))
                 assignment.append("}")
 
             else:
-                assignment.append("=")
-                assignment.append(ctx.true_value().getText().replace("this.", self.instance_name + "->").replace("call", ""))
-                assignment.append(";")
+                if not ctx.true_value().value().class_new():
+                    assignment.append("=")
+                    assignment.append(extract_name(ctx.true_value().getText(), my_type))
+                    assignment.append(";")
 
         if self.in_class_init:
             assignment.append(";")
@@ -409,3 +473,86 @@ class KoiTranspiler(KoiListener):
 
         self.current_class = []
         self.in_class_init = False
+
+    def enterWhen_block(self, ctx:KoiParser.When_blockContext):
+        self.current_line.append("switch")
+        self.current_line.append("(")
+        self.current_line.append(ctx.true_value().getText())
+        self.current_line.append(")")
+        self.current_line.append("{")
+
+    def exitWhen_block(self, ctx:KoiParser.When_blockContext):
+        self.current_line.append("}")
+
+    def enterIs_block(self, ctx:KoiParser.Is_blockContext):
+        self.current_line.append("case")
+
+        if ctx.half_compa():
+            if ctx.half_compa().comp.text == "<" or ctx.half_compa().comp.text == "<=":
+                self.current_line.append("INT_MIN")
+                self.current_line.append("...")
+                self.current_line.append(ctx.half_compa().getText().replace("<", "").replace("=", ""))
+
+                if "=" not in ctx.half_compa().comp.text:
+                    self.current_line.append("-")
+                    self.current_line.append("1")
+
+            elif ctx.half_compa().comp.text == ">" or ctx.half_compa().comp.text == ">=":
+                self.current_line.append(ctx.half_compa().getText().replace(">", "").replace("=", ""))
+
+                if "=" not in ctx.half_compa().comp.text:
+                    self.current_line.append("+")
+                    self.current_line.append("1")
+
+                self.current_line.append("...")
+                self.current_line.append("INT_MAX")
+
+        else:
+            self.current_line.append(ctx.true_value().getText())
+
+        self.current_line.append(":")
+
+    def exitIs_block(self, ctx:KoiParser.Is_blockContext):
+        self.current_line.append("break")
+        self.current_line.append(";")
+
+    def enterWhen_else(self, ctx:KoiParser.When_elseContext):
+        self.current_line.append("default")
+        self.current_line.append(":")
+
+    def exitWhen_else(self, ctx:KoiParser.When_elseContext):
+        self.current_line.append("break")
+        self.current_line.append(";")
+
+    def enterEnum_block(self, ctx:KoiParser.Enum_blockContext):
+        # TODO: Move enum values to their own "scope"
+        self.current_line.append("typedef")
+        self.current_line.append("enum")
+        self.current_line.append(ctx.name().getText())
+        self.current_line.append("{")
+
+        for i in ctx.ID():
+            if i.getText() not in self.all_names:
+                self.all_names.append(i.getText())
+
+            self.current_line.append(i.getText())
+            self.current_line.append(",")
+
+        self.current_line.append("}")
+        self.current_line.append(ctx.name().getText())
+        self.current_line.append(";")
+
+    def enterStruct_block(self, ctx:KoiParser.Struct_blockContext):
+        self.current_line.append("typedef")
+        self.current_line.append("struct")
+        self.current_line.append(ctx.name().getText())
+        self.current_line.append("{")
+
+        for i in ctx.struct_set():
+            self.current_line.append(type_to_c(i.type_().getText()))
+            self.current_line.append(i.name().getText())
+            self.current_line.append(";")
+
+        self.current_line.append("}")
+        self.current_line.append(ctx.name().getText())
+        self.current_line.append(";")
