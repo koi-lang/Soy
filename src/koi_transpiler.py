@@ -5,7 +5,7 @@ from typing import TextIO
 from .gen.KoiParser import KoiParser
 from .gen.KoiListener import KoiListener
 
-from .sanitize import koi_to_c, extract_comparisons, extract_paramaters
+from .sanitize import koi_to_c, extract_name, extract_comparisons, extract_paramaters
 
 
 class KoiTranspiler(KoiListener):
@@ -21,7 +21,7 @@ class KoiTranspiler(KoiListener):
 
         self.transpile_locally = transpile_locally
 
-        # Enviroment variables
+        # Enviroment variables:
         # SOY_HOME = A folder named "Soy". This is used to house the Soy install.
         # SOY_LIB = A folder in SOY_HOME, called "lib". This is used to house the core and standard libraries for Soy/Koi.
 
@@ -279,11 +279,15 @@ class KoiTranspiler(KoiListener):
     def enterLocal_asstmt(self, ctx:KoiParser.Local_asstmtContext):
         assignment = []
 
+        my_type = ""
+
         if ctx.type_():
             assignment.append(koi_to_c(ctx.type_().getText()))
             self.variable_dict[ctx.name().getText()] = koi_to_c(ctx.type_().getText())
 
-        assignment.append(ctx.name().getText().replace("this.", self.instance_name + "->"))
+            my_type = ctx.type_().getText()
+
+        assignment.append(extract_name(ctx.name().getText(), my_type, self.instance_name))
 
         if ctx.true_value():
             if ctx.true_value().value().function_call():
@@ -306,12 +310,12 @@ class KoiTranspiler(KoiListener):
 
             if ctx.true_value().getText().startswith("["):
                 assignment.append("{")
-                assignment.append(ctx.true_value().getText()[1:-1].replace("this.", self.instance_name + "->"))
+                assignment.append(extract_name(ctx.true_value().getText()[1:-1], my_type))
                 assignment.append("}")
 
             else:
                 assignment.append("=")
-                assignment.append(ctx.true_value().getText().replace("this.", self.instance_name + "->").replace("call", ""))
+                assignment.append(extract_name(ctx.true_value().getText(), my_type))
                 assignment.append(";")
 
         if self.in_class_init:
