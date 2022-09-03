@@ -2,9 +2,9 @@ from typing import TextIO
 
 import antlr4
 
-from src.gen.KoiLexer import KoiLexer, InputStream
-from src.gen.KoiParser import KoiParser
-from src.koi_transpiler import KoiTranspiler
+from .gen.KoiLexer import KoiLexer, InputStream
+from .gen.KoiParser import KoiParser
+from .koi_transpiler import KoiTranspiler
 
 
 def transpile_file(file_name: str, file: TextIO = None, transpile_locally: bool = True, tree: str = "program", text: str = ""):

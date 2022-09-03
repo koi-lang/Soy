@@ -1,0 +1,2 @@
+[build-system]
+requires = ["antlr4-python3-runtime ~= 4.10"]
