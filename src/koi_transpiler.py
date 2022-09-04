@@ -1,29 +1,18 @@
-import pathlib
 import os
-from typing import TextIO
+from pathlib import Path
 
-from .gen.KoiParser import KoiParser
 from .gen.KoiListener import KoiListener
-
+from .gen.KoiParser import KoiParser
 from .sanitize import type_to_c, extract_name, extract_comparisons, extract_paramaters
 
 
 class KoiTranspiler(KoiListener):
-    def __init__(self, file: TextIO = None, transpile_locally: bool = True):
-        # TODO: Change to use the Koi file name
+    def __init__(self, path: Path = None, transpile_locally: bool = True):
         # TODO: Create an associating header
-        if not file:
-            pathlib.Path("out").mkdir(exist_ok=True)
-            self.file = open("out/main.c", "w")
-
-        else:
-            self.file = file
+        Path("out").mkdir(exist_ok=True)
+        self.file = Path(f"out/{path.stem}.c")
 
         self.transpile_locally = transpile_locally
-
-        # Enviroment variables:
-        # SOY_HOME = A folder named "Soy". This is used to house the Soy install.
-        # SOY_LIB = A folder in SOY_HOME, called "lib". This is used to house the core and standard libraries for Soy/Koi.
 
         self.file_contents = []
 
@@ -55,21 +44,20 @@ class KoiTranspiler(KoiListener):
         self.instance_name = "instance"
 
     def exitProgram(self, ctx: KoiParser.ProgramContext):
-        for core in ["stdio.h", "limits.h", "stdbool.h", "stddef.h"]:
-            self.file.write(f"#include <{core}>\n")
+        with self.file.open("w") as f:
+            for core in ["stdio.h", "limits.h", "stdbool.h", "stddef.h"]:
+                f.write(f"#include <{core}>\n")
 
-        # for name in self.all_names:
-        #     self.file.write(f"#undef {name}\n")
+            # for name in self.all_names:
+            #     self.file.write(f"#undef {name}\n")
 
-        for import_ in self.imports:
-            self.file.write(import_)
+            for import_ in self.imports:
+                f.write(import_)
 
-        if self.define_name != "":
-            self.define_name = ""
+            if self.define_name != "":
+                self.define_name = ""
 
-        self.file.write(" ".join(" ".join(line) for line in self.file_contents))
-
-        self.file.close()
+            f.write(" ".join(" ".join(line) for line in self.file_contents))
 
     def exitLine(self, ctx: KoiParser.LineContext):
         # self.file.write(" ".join(self.current_line))
@@ -147,7 +135,7 @@ class KoiTranspiler(KoiListener):
             else:
                 if self.transpile_locally:
                     new_path = "/".join(path.split("/")[0:-1]) + "/" + path.split("/")[-1] + "/_compiled"
-                    pathlib.Path(new_path).mkdir(exist_ok=True)
+                    Path(new_path).mkdir(exist_ok=True)
 
                 else:
                     new_path = "out"
