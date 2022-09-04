@@ -112,7 +112,6 @@ class KoiTranspiler(KoiListener):
 
         if type(ctx.parentCtx) in [KoiParser.Function_blockContext, KoiParser.Procedure_blockContext,
                                    KoiParser.Enum_blockContext]:
-            print(type(ctx.parentCtx))
             self.current_line.insert(0, f"\n#endif\n")
 
     def enterImport_stmt(self, ctx: KoiParser.Import_stmtContext):
