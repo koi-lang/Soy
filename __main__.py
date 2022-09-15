@@ -9,3 +9,5 @@ if __name__ == "__main__":
         transpile_file(Path(f"examples/src/{i.stem}.koi"))
         print(f"Compiling {i.stem}.c")
         subprocess.run(["gcc", f"out/{i.stem}.c", "-o", f"out/{i.stem}.out"])
+
+    print("Finished")

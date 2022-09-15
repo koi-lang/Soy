@@ -9,7 +9,7 @@ from .gen.KoiParser import KoiParser
 from .koi_transpiler import KoiTranspiler
 
 
-def transpile_file(path: Path, transpile_locally: bool = True, tree: str = "program", text: str = ""):
+def transpile_file(path: Path, transpile_locally: bool = True, tree: str = "program"):
     lexer = KoiLexer(InputStream(path.read_text()))
     stream = CommonTokenStream(lexer)
     parser = KoiParser(stream)

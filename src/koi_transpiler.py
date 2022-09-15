@@ -6,6 +6,15 @@ from .gen.KoiParser import KoiParser
 from .sanitize import type_to_c, extract_name, extract_comparisons, extract_paramaters
 
 
+def has_ifndef(ctx):
+    return type(ctx) in [
+        KoiParser.Function_blockContext,
+        KoiParser.Procedure_blockContext,
+        KoiParser.Enum_blockContext,
+        KoiParser.Struct_blockContext,
+    ]
+
+
 class KoiTranspiler(KoiListener):
     def __init__(self, path: Path = None, transpile_locally: bool = True):
         # TODO: Create an associating header
@@ -67,10 +76,10 @@ class KoiTranspiler(KoiListener):
 
     def enterName(self, ctx: KoiParser.NameContext):
         if ctx.getText() not in self.all_names:
-            if type(ctx.parentCtx) in [KoiParser.Function_blockContext, KoiParser.Procedure_blockContext,
-                                       KoiParser.Enum_blockContext]:
+            if has_ifndef(ctx.parentCtx):
                 self.define_name = ctx.getText().upper() + "_EXISTS"
                 self.current_line.insert(0, f"\n#ifndef {self.define_name}\n")
+                self.current_line.insert(1, f"#define {self.define_name}\n")
                 self.all_names.append(ctx.getText())
 
         if ctx.THIS():
@@ -98,9 +107,8 @@ class KoiTranspiler(KoiListener):
                 ctx.parentCtx) is not KoiParser.Init_blockContext:
             self.current_line.append("}")
 
-        if type(ctx.parentCtx) in [KoiParser.Function_blockContext, KoiParser.Procedure_blockContext,
-                                   KoiParser.Enum_blockContext]:
-            self.current_line.insert(0, f"\n#endif\n")
+        if has_ifndef(ctx.parentCtx):
+            self.current_line.append(f"\n#endif\n")
 
     def enterImport_stmt(self, ctx: KoiParser.Import_stmtContext):
         # TODO: Transpile imported Koi files and store the output in a temporary location then link to that instead
@@ -133,26 +141,14 @@ class KoiTranspiler(KoiListener):
 
             # There's no C file, it must be a Koi file
             else:
-                if self.transpile_locally:
-                    new_path = "/".join(path.split("/")[0:-1]) + "/" + path.split("/")[-1] + "/_compiled"
-                    Path(new_path).mkdir(exist_ok=True)
+                path += "/" + ctx.package_name().last.text + ".koi"
 
-                else:
-                    new_path = "out"
+                from .transpile import transpile_file
+                transpile_file(Path(path))
 
-                newest_path = new_path + "/" + ctx.package_name().last.text + ".c"
-                if not os.path.isfile(newest_path):
-                    with open(newest_path, "w") as comp_file:
-                        from .transpile import transpile_file
+                path = ctx.package_name().last.text + ".c"
 
-                        transpile_file(path + "/" + ctx.package_name().last.text + ".koi", comp_file)
-
-                        path = comp_file.name
-
-                else:
-                    path = newest_path
-
-            import_path = "#include"
+            import_path = "#include "
 
             # self.current_line.append("#include")
 
@@ -539,6 +535,9 @@ class KoiTranspiler(KoiListener):
         self.current_line.append(ctx.name().getText())
         self.current_line.append(";")
 
+    def exitEnum_block(self, ctx:KoiParser.Enum_blockContext):
+        self.current_line.append(f"\n#endif\n")
+
     def enterStruct_block(self, ctx: KoiParser.Struct_blockContext):
         self.current_line.append("typedef")
         self.current_line.append("struct")
@@ -553,3 +552,6 @@ class KoiTranspiler(KoiListener):
         self.current_line.append("}")
         self.current_line.append(ctx.name().getText())
         self.current_line.append(";")
+
+    def exitStruct_block(self, ctx:KoiParser.Struct_blockContext):
+        self.current_line.append(f"\n#endif\n")

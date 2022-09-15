@@ -7,3 +7,6 @@
 [submodule "libs/core"]
 	path = libs/core
 	url = https://github.com/koi-lang/soy-core
+[submodule "libs/std"]
+	path = libs/std
+	url = https://github.com/koi-lang/aa-batteries
