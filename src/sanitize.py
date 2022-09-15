@@ -1,6 +1,6 @@
 from typing import List
 
-from .gen.KoiParser import KoiParser
+from .gen.grammar.KoiParser import KoiParser
 
 
 def type_to_c(type_: str) -> str:

@@ -1,11 +1,10 @@
 from pathlib import Path
-from typing import TextIO
 
 import antlr4
 from antlr4 import CommonTokenStream
 
-from .gen.KoiLexer import KoiLexer, InputStream
-from .gen.KoiParser import KoiParser
+from .gen.grammar.KoiLexer import KoiLexer, InputStream
+from .gen.grammar.KoiParser import KoiParser
 from .koi_transpiler import KoiTranspiler
 
 

@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
 
-from .gen.KoiListener import KoiListener
-from .gen.KoiParser import KoiParser
+from .gen.grammar.KoiListener import KoiListener
+from .gen.grammar.KoiParser import KoiParser
 from .sanitize import type_to_c, extract_name, extract_comparisons, extract_paramaters
 
 
