@@ -8,6 +8,7 @@ from .sanitize import type_to_c, extract_name, extract_comparisons, extract_para
 
 def has_ifndef(ctx):
     return type(ctx) in [
+        KoiParser.Class_blockContext,
         KoiParser.Function_blockContext,
         KoiParser.Procedure_blockContext,
         KoiParser.Enum_blockContext,
@@ -269,11 +270,21 @@ class KoiTranspiler(KoiListener):
         #     self.current_line.append(";")
 
     def enterFor_block(self, ctx: KoiParser.For_blockContext):
+        if ctx.with_length() is None:
+            size = ctx.name()[1].getText()
+
+        else:
+            size = ctx.with_length().getText()
+
         # FIXME: Fix in-line lists
         self.current_name = ctx.name()[0].getText()
         self.current_line.append("int")
         self.current_line.append(self.loop_name)
         self.current_line.append(";")
+
+        self.current_line.append(
+            f"size_t length = (&{size})[1] - {size};"
+        )
 
         self.current_line.append(type_to_c(ctx.type_().getText()))
         self.current_line.append(self.current_name)
@@ -289,27 +300,9 @@ class KoiTranspiler(KoiListener):
 
         self.current_line.append(self.loop_name)
         self.current_line.append("<")
-        self.current_line.append("sizeof")
-        self.current_line.append("(")
-
-        if ctx.with_length() is None:
-            size = ctx.name()[1].getText()
-
-        else:
-            size = ctx.with_length().getText()
-        self.current_line.append(size)
+        self.current_line.append("length")
 
         self.secondary_name = ctx.name()[0].getText()
-
-        self.current_line.append(")")
-
-        self.current_line.append("/")
-
-        self.current_line.append("sizeof")
-        self.current_line.append("*")
-        self.current_line.append("(")
-        self.current_line.append(size)
-        self.current_line.append(")")
 
         self.current_line.append(";")
         self.current_line.append(self.loop_name)
